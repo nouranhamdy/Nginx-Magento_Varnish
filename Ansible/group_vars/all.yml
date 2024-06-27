@@ -1,0 +1,23 @@
+base_url: https://www.nouran-task.xyz
+
+db_host: localhost
+db_user: magento
+db_password: 123456
+db_name: magento_db
+
+php_version: 8.1
+
+magento_dir: /var/www/html/magento2
+magento_public_key:  0c5cb930b59e840672874f1a31b8a666
+magento_private_key:  d7c5d5a179d0690719151871e58f981a
+magento_mode: developer
+timezone: Europe/London
+language: en_GB
+currency: GBP
+backend_frontname: admin
+admin_firstname: admin
+admin_lastname: admin
+admin_email: admin@admin.com
+admin_user: admin
+admin_password: admin123
+use_rewrites: 1

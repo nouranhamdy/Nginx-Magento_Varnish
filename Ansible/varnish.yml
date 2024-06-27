@@ -1,0 +1,50 @@
+- hosts: magento-servers
+  remote_user: ubuntu
+  become: true
+  tasks:
+  - name: update
+    apt: 
+      update_cache: yes
+  - name: Install Varnish
+    apt: 
+      name: varnish 
+      state: latest
+  - name: Bckup default varnish configuration
+    copy: remote_src=True src=/etc/varnish/default.vcl dest=/etc/varnish/default.vcl.bak
+  - name: Remove old files 
+    file: path=/etc/varnish/default.vcl state=absent
+  - name: copy varnish configuration
+    template:
+      src: varnish.vcl
+      dest: /etc/varnish/default.vcl
+    notify:
+      - restart varnish
+  - name: copy nginx configuration
+    template:
+      src: varnish-nginx.conf
+      dest: /etc/varnish/varnish-nginx.conf
+
+  - name: copy nginx configuration
+    template:
+      src: nginx.conf
+      dest: /etc/nginx/sites-available/magento
+
+  - name: Pypass all nginx traffic to varnish
+    ansible.builtin.lineinfile:
+      path: /etc/nginx/sites-available/magento
+      regexp: 'include /etc/varnish/varnish-nginx.conf;'
+      insertafter: 'listen 443 ssl;'
+      line: include /etc/varnish/varnish-nginx.conf;
+    notify:
+      - restart nginx
+      - restart varnish
+  handlers:
+    - name: restart nginx
+      service: 
+        name: nginx 
+        state: reloaded
+    - name: restart varnish
+      service: 
+        name: varnish 
+        state: restarted
+  

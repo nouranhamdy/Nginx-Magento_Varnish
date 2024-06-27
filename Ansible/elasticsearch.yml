@@ -1,0 +1,44 @@
+- hosts: magento-servers
+  remote_user: ubuntu
+  become: true
+  tasks:
+  - name: Add ElasticSearch repo
+    shell: |
+     wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
+     echo "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main" | sudo tee /etc/apt/sources.list.d/elastic-8.x.list
+  - name: update
+    apt: 
+      update_cache: yes
+  - name: Install ElasticSearch
+    apt: 
+      name: elasticsearch 
+      state: latest
+  - name: Start ElasticSearch Service
+    service:
+      name: elasticsearch
+      state: started
+      enabled: true
+  - name: Replace security setting with false
+    shell: |
+     sed -i 's/xpack.security.enabled: true/xpack.security.enabled: false/' /etc/elasticsearch/elasticsearch.yml
+     sed -i 's/#http.port/http.port/' /etc/elasticsearch/elasticsearch.yml
+     sed -i 's/#transport.host: 0.0.0.0/transport.host: localhost/' /etc/elasticsearch/elasticsearch.yml
+    notify:
+      - restart ElasticSearch
+  
+  #create jvm.options under jvm.options.d to customize the heap space that it consumes
+  - name: Creating a jvm.options file
+    copy:
+      dest: "/etc/elasticsearch/jvm.options.d/jvm.options"
+      content: |
+        -Xms750m
+        -Xmx750m
+    notify:
+      - restart ElasticSearch
+  
+  handlers:
+    - name: restart ElasticSearch
+      service: 
+        name: elasticsearch 
+        state: restarted
+  

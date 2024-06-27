@@ -1,0 +1,70 @@
+upstream fastcgi_backend {
+        server  unix:/run/php/php8.1-fpm.sock;
+}
+
+server {
+   server_name www.nouran-task.xyz;
+   set $MAGE_ROOT /var/www/html/magento2; 
+   set $MAGE_RUN_TYPE website;
+   set $MAGE_MODE developer;
+   include /var/www/html/magento2/nginx.conf.sample;
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/www.nouran-task.xyz/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/www.nouran-task.xyz/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+
+    location / {
+        proxy_pass http://127.0.0.1:6081;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Ssl-Offloaded "1";
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_redirect  http://www.nouran-task.xyz:8081/  /;
+        proxy_http_version 1.1;
+    }
+
+
+}
+ 
+
+server {
+
+        listen 8081;
+        server_name _;
+        # PHP entry point for main application
+        location ~ (index|get|static|report|404|503|health_check)\.php$ {
+        try_files $uri =404;
+        fastcgi_pass   fastcgi_backend;
+        fastcgi_buffers 1024 4k;
+
+        fastcgi_param  PHP_FLAG  "session.auto_start=off \n suhosin.session.cryptua=off";
+        fastcgi_param  PHP_VALUE "memory_limit=756M \n max_execution_time=18000";
+        fastcgi_read_timeout 600s;
+        fastcgi_connect_timeout 600s;
+
+        fastcgi_index  index.php;
+        fastcgi_param  SCRIPT_FILENAME  $document_root$fastcgi_script_name;
+        #fastcgi_param MAGE_RUN_TYPE $MAGE_RUN_TYPE;
+        #fastcgi_param MAGE_RUN_CODE $MAGE_RUN_CODE;
+        include        fastcgi_params;
+        }
+}
+
+
+server {
+    if ($host = www.nouran-task.xyz) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+   listen 80;
+   server_name www.nouran-task.xyz;
+   #return 404; # managed by Certbot
+
+
+}

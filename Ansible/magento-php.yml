@@ -1,0 +1,163 @@
+- hosts: magento-servers
+  remote_user: ubuntu
+  become: true
+  tasks:
+  - name: Install PHP {{ php_version }} and Magento PHP Dependencies
+    apt:
+      name: [
+      "php{{ php_version }}",
+      "php{{ php_version }}-fpm",
+      "php{{ php_version }}-bcmath",
+      "php{{ php_version }}-curl",
+      "php{{ php_version }}-dom",
+      "php{{ php_version }}-gd",
+      "php{{ php_version }}-iconv",
+      "php{{ php_version }}-intl",
+      "php{{ php_version }}-mbstring",
+      "php{{ php_version }}-mysql",
+      "php{{ php_version }}-simplexml",
+      "php{{ php_version }}-soap",
+      "php{{ php_version }}-xsl",
+      "php{{ php_version }}-zip"
+      ]
+      state: latest
+  - name: Configure php cli
+    template:
+      src: php.ini
+      dest: /etc/php/8.1/cli/php.ini
+  - name: Configure php fpm
+    template:
+      src: php.ini
+      dest: /etc/php/8.1/fpm/php.ini
+  
+
+  - name: Download Composer Installer
+    get_url:
+      url: https://getcomposer.org/installer
+      dest: /tmp/composer-installer
+      mode: 0755
+
+  - name: Install Composer using PHP
+    shell: php composer-installer
+    args:
+      chdir: /tmp/
+
+  - name: Move Composer File to /user/local/bin
+    shell: mv composer.phar /usr/local/bin/composer
+    args:
+      chdir: /tmp/
+
+  - name: Copy to /usr/bin/composer
+    copy: 
+      remote_src: True
+      src: /usr/local/bin/composer
+      dest: /usr/bin/composer
+      owner: root
+      group: root
+      
+  
+  - name: Set Magento Access Keys for Composer
+    shell: |
+      yes | sudo composer global config http-basic.repo.magento.com "{{ magento_public_key }}" "{{ magento_private_key }}"
+    
+
+  - name: Create the Magento Open Source Project
+    shell: |
+      yes | sudo composer create-project --repository=https://repo.magento.com/ magento/project-community-edition /var/www/html/magento2
+    
+
+  - name: Set Files Permissions to g+w
+    shell: find var generated vendor pub/static pub/media app/etc -type f -exec chmod g+w {} \;
+    args:
+      chdir: /var/www/html/magento2
+
+  - name: Set Directories Permissions to g+ws
+    shell: find var generated vendor pub/static pub/media app/etc -type d -exec chmod g+ws {} \;
+    args:
+      chdir: /var/www/html/magento2
+
+  - name: Set Files and Directories Group User
+    file:
+      dest: /var/www/html/magento2
+      group: www-data
+      recurse: yes
+
+  - name: Set Permission u+x to bin/magento
+    file:
+      path: /var/www/html/magento2/bin/magento"
+      mode: u+x
+
+
+  - name: Install Composer
+    shell: |
+      cd /var/www/html/magento2
+      sed -i 's/"php": "~7.1.3||~7.2.0"/"php": "~7.1.3||~7.2.0||~8.1.2"/' composer.json
+      composer install -v
+  - name: Download Composer
+    shell: |
+      curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/bin --filename=composer
+    args:
+      creates: /usr/bin/composer
+
+  - name: Install Magento
+    shell: |
+      php bin/magento setup:install \
+      --base-url="{{ base_url }}" \
+      --db-host="{{ db_host }}" \
+      --db-name="{{ db_name }}" \
+      --db-user="{{ db_user }}" \
+      --db-password="{{ db_password }}" \
+      --backend-frontname="{{ backend_frontname }}" \
+      --admin-firstname="{{ admin_firstname }}" \
+      --admin-lastname="{{ admin_lastname }}" \
+      --admin-email="{{ admin_email }}" \
+      --admin-user="{{ admin_user }}" \
+      --admin-password="{{ admin_password }}" \
+      --language="{{ language }}" \
+      --currency="{{ currency }}" \
+      --timezone="{{ timezone }}" \
+      --use-rewrites="{{ use_rewrites }}"
+    args:
+      chdir: /var/www/html/magento2
+
+  - name: Change Magento Deployment Mode
+    shell: php bin/magento deploy:mode:set "{{ magento_mode }}"
+    args:
+      chdir: /var/www/html/magento2
+    when: magento_mode != 'default'
+
+  - name: Deploy the Static Content
+    shell: php bin/magento setup:static-content:deploy -f
+    args:
+      chdir: /var/www/html/magento2
+
+  - name: Enable access to admin panel
+    shell: php bin/magento setup:store-config:set --use-secure-admin=1
+    args:
+      chdir: /var/www/html/magento2
+  
+  - name: Disable Two-factor auth
+    shell: |
+      php bin/magento module:disable Magento_AdminAdobeImsTwoFactorAuth
+      php bin/magento module:disable Magento_TwoFactorAuth
+      php bin/magento setup:upgrade
+    args:
+      chdir: /var/www/html/magento2
+
+  - name: Flush Cache
+    shell: php bin/magento cache:flush
+    args:
+      chdir: /var/www/html/magento2
+
+  - name: Enable Cache
+    shell: php bin/magento cache:enable
+    args:
+      chdir: /var/www/html/magento2
+
+  - name: Add Magento to Cron
+    shell: php bin/magento cron:install 
+    args:
+      chdir: /var/www/html/magento2
+
+
+  
